@@ -75,7 +75,7 @@ jobs:
           # otherwise the plugin_opener (initialized below) allows it.
           
           cat > src-tauri/src/lib.rs <<EOF
-          use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+          use tauri::{WebviewUrl, WebviewWindowBuilder};
 
           const INTENT_JS: &str = r#"
             window.addEventListener('click', (e) => {
@@ -101,8 +101,8 @@ jobs:
                       
                       let url = url_str.parse().expect("Invalid App URL");
                       
+                      // Removed .title() as it causes compilation error on mobile
                       let _window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
-                          .title("$APP_NAME")
                           .user_agent(ua)
                           .initialization_script(INTENT_JS)
                           .build()?;
