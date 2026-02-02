@@ -61,11 +61,31 @@ jobs:
         working-directory: ./app-template
         env:
             NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
-        run: npm run tauri android build -- --debug --apk true
-        # Using CLI directly as tauri-action support for mobile might be limited or require specific config
-
-      - name: Generate Tag Name
-        run: echo "TAG_NAME=v-$(echo "${{ github.event.inputs.app_name }}" | tr ' ' '-')-${{ github.run_number }}" >> $GITHUB_ENV
+        run: npm run tauri android build -- --apk true
+      
+      - name: Sign APK
+        id: sign_app
+        run: |
+          # 1. Generate a temporary keystore
+          keytool -genkey -v -keystore release.keystore -alias android -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Release,O=Android,C=US"
+          
+          # 2. Find the unsigned APK
+          UNSIGNED_APK=$(find app-template/src-tauri/gen/android -name "*-unsigned.apk" | head -n 1)
+          echo "Found APK: $UNSIGNED_APK"
+          
+          # 3. Find apksigner tool
+          BUILD_TOOLS_VERSION=$(ls $ANDROID_SDK_ROOT/build-tools | sort -r | head -n 1)
+          APKSIGNER="$ANDROID_SDK_ROOT/build-tools/$BUILD_TOOLS_VERSION/apksigner"
+          echo "Using apksigner: $APKSIGNER"
+          
+          # 4. Sign the APK (Output proper filename)
+          # Use user inputs or sanitized tag for filename
+          SANITIZED_NAME=$(echo "${{ github.event.inputs.app_name }}" | tr ' ' '-')
+          FINAL_APK="${SANITIZED_NAME}-release.apk"
+          
+          "$APKSIGNER" sign --ks release.keystore --ks-pass pass:android --key-pass pass:android --out $FINAL_APK "$UNSIGNED_APK"
+          
+          echo "SIGNED_APK_PATH=$FINAL_APK" >> $GITHUB_ENV
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -73,6 +93,6 @@ jobs:
         with:
           tag_name: ${{ env.TAG_NAME }}
           name: "Release ${{ github.event.inputs.app_name }}"
-          files: app-template/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          files: ${{ env.SIGNED_APK_PATH }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
