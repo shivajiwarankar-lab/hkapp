@@ -74,6 +74,20 @@ export default function Home() {
         }
     };
 
+    const handleClearHistory = async () => {
+        if (!confirm('This will delete all build logs/history from GitHub. Only releases (files) will remain. Continue?')) return;
+
+        try {
+            const res = await fetch('/api/history', { method: 'DELETE' });
+            if (!res.ok) throw new Error('Failed to clear history');
+            const data = await res.json();
+            alert(data.message);
+        } catch (err) {
+            alert('Error clearing history');
+            console.error(err);
+        }
+    };
+
     return (
         <main className="container">
             <div className="glass-panel" style={{ padding: '2rem' }}>
@@ -152,6 +166,13 @@ export default function Home() {
                             style={{ width: 'auto', padding: '6px 12px', fontSize: '0.8rem' }}
                         >
                             ↻ Refresh
+                        </button>
+                        <button
+                            onClick={handleClearHistory}
+                            className="glass-button"
+                            style={{ width: 'auto', padding: '6px 12px', fontSize: '0.8rem', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#fca5a5' }}
+                        >
+                            🧹 Clear Logs
                         </button>
                     </div>
 
