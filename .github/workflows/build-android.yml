@@ -9,6 +9,9 @@ on:
       app_url:
         description: 'URL to convert'
         required: true
+      app_logo:
+        description: 'Logo URL (PNG, optional)'
+        required: false
 
 jobs:
   build-android:
@@ -41,11 +44,40 @@ jobs:
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
         with:
-           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Dependencies (System)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.0-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
 
       - name: Install Frontend Dependencies
         working-directory: ./app-template
         run: npm install
+
+      - name: Setup App Icons
+        if: "${{ github.event.inputs.app_logo != '' }}"
+        working-directory: ./app-template
+        run: |
+          LOGO_URL="${{ github.event.inputs.app_logo }}"
+          echo "Downloading logo from $LOGO_URL..."
+          curl -L -o app-icon.png "$LOGO_URL"
+          
+          # Verify it's an image
+          file app-icon.png
+          
+          # Generate icons
+          echo "Generating icons..."
+          npm run tauri icon app-icon.png
+
 
       - name: Configure App and Inject Intent Handler
         working-directory: ./app-template

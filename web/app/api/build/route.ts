@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
     try {
-        const { url, name, platforms } = await req.json();
+        const { url, name, platforms, logo } = await req.json();
 
         if (!url || !name) {
             return NextResponse.json({ error: 'URL and Name are required' }, { status: 400 });
@@ -50,6 +50,7 @@ export async function POST(req: Request) {
                     inputs: {
                         app_url: url,
                         app_name: name,
+                        app_logo: logo || '',
                     },
                 }),
             });

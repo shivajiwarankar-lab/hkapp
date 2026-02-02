@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 export default function Home() {
     const [url, setUrl] = useState('');
     const [name, setName] = useState('');
+    const [logoUrl, setLogoUrl] = useState('');
     const [buildWindows, setBuildWindows] = useState(true);
     const [buildAndroid, setBuildAndroid] = useState(true);
     const [loading, setLoading] = useState(false);
@@ -37,7 +38,7 @@ export default function Home() {
             const res = await fetch('/api/build', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url, name, platforms }),
+                body: JSON.stringify({ url, name, platforms, logo: logoUrl }),
             });
 
             const data = await res.json();
@@ -118,6 +119,18 @@ export default function Home() {
                             required
                             value={name}
                             onChange={(e) => setName(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="form-group">
+                        <label htmlFor="logo">Logo URL (Optional)</label>
+                        <input
+                            id="logo"
+                            type="url"
+                            className="glass-input"
+                            placeholder="https://example.com/logo.png"
+                            value={logoUrl}
+                            onChange={(e) => setLogoUrl(e.target.value)}
                         />
                     </div>
 

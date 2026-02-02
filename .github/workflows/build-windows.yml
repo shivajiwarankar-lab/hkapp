@@ -9,6 +9,9 @@ on:
       app_url:
         description: 'URL to convert'
         required: true
+      app_logo:
+        description: 'Logo URL (PNG, optional)'
+        required: false
 
 jobs:
   build-windows:
