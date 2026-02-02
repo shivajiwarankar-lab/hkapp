@@ -63,22 +63,6 @@ jobs:
         working-directory: ./app-template
         run: npm install
 
-      - name: Setup App Icons
-        if: "${{ github.event.inputs.app_logo != '' }}"
-        working-directory: ./app-template
-        run: |
-          LOGO_URL="${{ github.event.inputs.app_logo }}"
-          echo "Downloading logo from $LOGO_URL..."
-          curl -L -o app-icon.png "$LOGO_URL"
-          
-          # Verify it's an image
-          file app-icon.png
-          
-          # Generate icons
-          echo "Generating icons..."
-          npm run tauri icon app-icon.png
-
-
       - name: Configure App and Inject Intent Handler
         working-directory: ./app-template
         run: |
@@ -87,7 +71,11 @@ jobs:
           APP_URL="${{ github.event.inputs.app_url }}"
           SANITIZED_NAME=$(echo "$APP_NAME" | tr ' ' '' | tr -cd 'a-zA-Z0-9' | tr '[:upper:]' '[:lower:]')
           if [ -z "$SANITIZED_NAME" ]; then SANITIZED_NAME="template"; fi
-          IDENTIFIER="com.app.$SANITIZED_NAME"
+          
+          # Unique Identifier to prevent update conflicts
+          TIMESTAMP=$(date +%s)
+          IDENTIFIER="com.app.$SANITIZED_NAME.$TIMESTAMP"
+          
           # Standard Chrome Mobile UA
           USER_AGENT="Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
@@ -95,17 +83,12 @@ jobs:
 
           # 2. Modify tauri.conf.json
           # We REMOVE the 'app.windows' array because we will create the window in Rust (lib.rs)
-          # This gives us access to 'initialization_script' and robust settings.
           jq --arg name "$APP_NAME" --arg id "$IDENTIFIER" \
              '.productName = $name | .identifier = $id | del(.app.windows)' \
              src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp && mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
 
           # 3. Overwrite src-tauri/src/lib.rs
-          # We inject the window creation logic directly here.
-          # The initialization script handles 'whatsapp:', 'tel:', 'mailto:', and 'intent:' links.
-          # We use `window.open` which the main WebView should handle if possible, 
-          # otherwise the plugin_opener (initialized below) allows it.
-          
+          # Improved Intent Handler for WhatsApp and other links
           cat > src-tauri/src/lib.rs <<EOF
           use tauri::{WebviewUrl, WebviewWindowBuilder};
 
@@ -114,8 +97,16 @@ jobs:
               const link = e.target.closest('a');
               if (link && link.href) {
                  const href = link.href;
-                 if (href.startsWith('whatsapp:') || href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('intent:')) {
-                    // Force external open
+                 // Handle standard schemes and WhatsApp web links
+                 if (
+                    href.startsWith('whatsapp:') || 
+                    href.startsWith('mailto:') || 
+                    href.startsWith('tel:') || 
+                    href.startsWith('intent:') ||
+                    href.includes('api.whatsapp.com') ||
+                    href.includes('wa.me')
+                 ) {
+                    // Force external open for these
                     window.open(href, '_blank');
                     e.preventDefault();
                  }
@@ -133,7 +124,6 @@ jobs:
                       
                       let url = url_str.parse().expect("Invalid App URL");
                       
-                      // Removed .title() as it causes compilation error on mobile
                       let _window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                           .user_agent(ua)
                           .initialization_script(INTENT_JS)
@@ -148,6 +138,33 @@ jobs:
       - name: Initialize Android Project
         working-directory: ./app-template
         run: npm run tauri android init
+
+      - name: Setup App Icons
+        if: "${{ github.event.inputs.app_logo != '' }}"
+        working-directory: ./app-template
+        run: |
+          LOGO_URL="${{ github.event.inputs.app_logo }}"
+          echo "Downloading logo from $LOGO_URL..."
+          curl -L -o app-icon.png "$LOGO_URL"
+          
+          # Generate icons (AFTER init so Android resources exist)
+          echo "Generating icons..."
+          npm run tauri icon app-icon.png
+
+      - name: Optimize Rust Build (Direct Cargo.toml injection)
+        working-directory: ./app-template
+        run: |
+          # Append release profile optimizations to Cargo.toml
+          cat >> src-tauri/Cargo.toml <<EOF
+          
+          [profile.release]
+          codegen-units = 1
+          lto = true
+          strip = true
+          opt-level = "z"
+          panic = "abort"
+          EOF
+
 
 
 
