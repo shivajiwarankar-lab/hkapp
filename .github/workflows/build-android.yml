@@ -108,7 +108,10 @@ jobs:
 
       - name: Initialize Android Project
         working-directory: ./app-template
-        run: npm run tauri android init
+        run: |
+          # Clean up previous android generation (crucial if identifier changed)
+          rm -rf src-tauri/gen/android
+          npm run tauri android init
 
       - name: Setup App Icons
         if: "${{ github.event.inputs.app_logo != '' }}"
