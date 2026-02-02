@@ -61,7 +61,7 @@ jobs:
         working-directory: ./app-template
         env:
             NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
-        run: npm run tauri android build -- --apk
+        run: npm run tauri android build -- --apk true
         # Using CLI directly as tauri-action support for mobile might be limited or require specific config
 
       - name: Create Release

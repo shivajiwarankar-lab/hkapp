@@ -143,18 +143,24 @@ export default function Home() {
                 )}
 
                 {/* Downloads Section */}
-                {releases.length > 0 && (
-                    <div style={{ marginTop: '3rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                            <h2 style={{ fontSize: '1.5rem', margin: 0 }}>Recent Builds</h2>
-                            <button
-                                onClick={fetchReleases}
-                                className="glass-button"
-                                style={{ width: 'auto', padding: '6px 12px', fontSize: '0.8rem' }}
-                            >
-                                ↻ Refresh
-                            </button>
+                <div style={{ marginTop: '3rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                        <h2 style={{ fontSize: '1.5rem', margin: 0 }}>Recent Builds</h2>
+                        <button
+                            onClick={fetchReleases}
+                            className="glass-button"
+                            style={{ width: 'auto', padding: '6px 12px', fontSize: '0.8rem' }}
+                        >
+                            ↻ Refresh
+                        </button>
+                    </div>
+
+                    {releases.length === 0 ? (
+                        <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
+                            <p>No builds found yet.</p>
+                            <p style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>Generate an app to see it here (takes ~10 mins).</p>
                         </div>
+                    ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             {releases.slice(0, 5).map((release: any) => (
                                 <div key={release.id} className="glass-panel" style={{ padding: '1rem', background: 'rgba(255,255,255,0.03)' }}>
@@ -190,8 +196,8 @@ export default function Home() {
                                 </div>
                             ))}
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
 
             </div>
         </main>
