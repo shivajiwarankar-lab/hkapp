@@ -27,7 +27,7 @@ export async function POST(req: Request) {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    ref: 'master', // or main, depending on your default branch
+                    ref: 'main',
                     inputs: {
                         app_url: url,
                         app_name: name,
@@ -46,7 +46,11 @@ export async function POST(req: Request) {
 
         const failures = results.filter(r => r.status === 'failed');
         if (failures.length > 0) {
-            return NextResponse.json({ error: 'Failed to trigger some builds', details: failures }, { status: 500 });
+            // Serialize the failure details for the client
+            return NextResponse.json({
+                error: 'Failed to trigger some builds',
+                details: failures.map(f => `${f.workflow}: ${f.error}`)
+            }, { status: 500 });
         }
 
         return NextResponse.json({ message: 'Builds triggered successfully' });
