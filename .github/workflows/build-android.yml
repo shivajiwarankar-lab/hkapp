@@ -47,7 +47,10 @@ jobs:
         working-directory: ./app-template
         run: npm install
 
-      # ... (Configure App, Init, Build steps remain same) ...
+      - name: Initialize Android Project
+        working-directory: ./app-template
+        run: npm run tauri android init
+
 
       - name: Build Android App
         working-directory: ./app-template
