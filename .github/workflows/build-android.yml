@@ -51,6 +51,33 @@ jobs:
         working-directory: ./app-template
         run: npm run tauri android init
 
+      - name: Configure App Name and URL
+        working-directory: ./app-template
+        run: |
+          # 1. Update tauri.conf.json with App Name and unique identifier
+          # Use jq to modify productName and identifier. 
+          # Identifier must be in reverse domain notation.
+          APP_NAME="${{ github.event.inputs.app_name }}"
+          APP_URL="${{ github.event.inputs.app_url }}"
+          SANITIZED_NAME=$(echo "$APP_NAME" | tr ' ' '' | tr -cd 'a-zA-Z0-9' | tr '[:upper:]' '[:lower:]')
+          
+          # Default to "com.app.template" if name is empty or invalid
+          if [ -z "$SANITIZED_NAME" ]; then SANITIZED_NAME="template"; fi
+          IDENTIFIER="com.app.$SANITIZED_NAME"
+
+          echo "Configuring App: Name='$APP_NAME', ID='$IDENTIFIER', URL='$APP_URL'"
+
+          # Modify tauri.conf.json
+          # Note: We need to use a temporary file for jq
+          jq --arg name "$APP_NAME" --arg id "$IDENTIFIER" \
+             '.productName = $name | .identifier = $id | .app.windows[0].title = $name' \
+             src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp && mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
+
+          # 2. Configure URL redirection in main.ts
+          # We simply rewrite main.ts to redirect window.location
+          echo "window.location.href = '$APP_URL';" > src/main.ts
+
+
 
       - name: Build Android App
         working-directory: ./app-template
