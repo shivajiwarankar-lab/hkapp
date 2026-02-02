@@ -60,18 +60,63 @@ jobs:
           # Default to "com.app.template" if name is empty or invalid
           if [ -z "$SANITIZED_NAME" ]; then SANITIZED_NAME="template"; fi
           IDENTIFIER="com.app.$SANITIZED_NAME"
+          
+          # User Agent to bypass Google Sign-In restrictions (spoof Chrome Mobile)
+          USER_AGENT="Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
           echo "Configuring App: Name='$APP_NAME', ID='$IDENTIFIER', URL='$APP_URL'"
 
           # Modify tauri.conf.json
           # Note: We need to use a temporary file for jq
-          jq --arg name "$APP_NAME" --arg id "$IDENTIFIER" \
-             '.productName = $name | .identifier = $id | .app.windows[0].title = $name' \
+          jq --arg name "$APP_NAME" --arg id "$IDENTIFIER" --arg ua "$USER_AGENT" \
+             '.productName = $name | .identifier = $id | .app.windows[0].title = $name | .app.windows[0].userAgent = $ua' \
              src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp && mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
 
           # 2. Configure URL redirection in main.ts
           # We simply rewrite main.ts to redirect window.location
           echo "window.location.href = '$APP_URL';" > src/main.ts
+
+          # 3. Custom Splash Screen (Replace default Tauri index.html)
+          # We create a simple dark screen with a loading spinner to show while redirecting.
+          cat > index.html <<EOF
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>$APP_NAME</title>
+            <style>
+              body {
+                background-color: #000000;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+                color: white;
+                font-family: sans-serif;
+              }
+              .loader {
+                border: 4px solid #f3f3f3;
+                border-top: 4px solid #3498db;
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                animation: spin 1s linear infinite;
+              }
+              @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+              }
+            </style>
+            <script type="module" src="/src/main.ts" defer></script>
+          </head>
+          <body>
+            <div class="loader"></div>
+          </body>
+          </html>
+          EOF
+
 
       - name: Initialize Android Project
         working-directory: ./app-template
