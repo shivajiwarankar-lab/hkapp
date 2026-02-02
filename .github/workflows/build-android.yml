@@ -47,10 +47,6 @@ jobs:
         working-directory: ./app-template
         run: npm install
 
-      - name: Initialize Android Project
-        working-directory: ./app-template
-        run: npm run tauri android init
-
       - name: Configure App Name and URL
         working-directory: ./app-template
         run: |
@@ -76,6 +72,10 @@ jobs:
           # 2. Configure URL redirection in main.ts
           # We simply rewrite main.ts to redirect window.location
           echo "window.location.href = '$APP_URL';" > src/main.ts
+
+      - name: Initialize Android Project
+        working-directory: ./app-template
+        run: npm run tauri android init
 
 
 
