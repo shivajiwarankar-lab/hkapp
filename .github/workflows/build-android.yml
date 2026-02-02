@@ -88,51 +88,22 @@ jobs:
              src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp && mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
 
           # 3. Overwrite src-tauri/src/lib.rs
-          # Improved Intent Handler for WhatsApp and other links
-          cat > src-tauri/src/lib.rs <<EOF
-          use tauri::{WebviewUrl, WebviewWindowBuilder};
+      - name: Optimize Rust Build and Add Dependencies
+        working-directory: ./app-template
+        run: |
+          # Add 'open' crate for handling external links
+          # We use sed to insert it under [dependencies]
+          sed -i '/\[dependencies\]/a open = "5"' src-tauri/Cargo.toml
 
-          const INTENT_JS: &str = r#"
-            window.addEventListener('click', (e) => {
-              const link = e.target.closest('a');
-              if (link && link.href) {
-                 const href = link.href;
-                 // Handle standard schemes and WhatsApp web links
-                 if (
-                    href.startsWith('whatsapp:') || 
-                    href.startsWith('mailto:') || 
-                    href.startsWith('tel:') || 
-                    href.startsWith('intent:') ||
-                    href.includes('api.whatsapp.com') ||
-                    href.includes('wa.me')
-                 ) {
-                    // Force external open for these
-                    window.open(href, '_blank');
-                    e.preventDefault();
-                 }
-              }
-            });
-          "#;
-
-          #[cfg_attr(mobile, tauri::mobile_entry_point)]
-          pub fn run() {
-              tauri::Builder::default()
-                  .plugin(tauri_plugin_opener::init())
-                  .setup(|app| {
-                      let url_str = "$APP_URL";
-                      let ua = "$USER_AGENT";
-                      
-                      let url = url_str.parse().expect("Invalid App URL");
-                      
-                      let _window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
-                          .user_agent(ua)
-                          .initialization_script(INTENT_JS)
-                          .build()?;
-                      Ok(())
-                  })
-                  .run(tauri::generate_context!())
-                  .expect("error while running tauri application");
-          }
+          # Append release profile optimizations
+          cat >> src-tauri/Cargo.toml <<EOF
+          
+          [profile.release]
+          codegen-units = 1
+          lto = true
+          strip = true
+          opt-level = "z"
+          panic = "abort"
           EOF
 
       - name: Initialize Android Project
@@ -151,18 +122,77 @@ jobs:
           echo "Generating icons..."
           npm run tauri icon app-icon.png
 
-      - name: Optimize Rust Build (Direct Cargo.toml injection)
+      - name: Configure App and Inject Intent Handler
         working-directory: ./app-template
         run: |
-          # Append release profile optimizations to Cargo.toml
-          cat >> src-tauri/Cargo.toml <<EOF
+          # 1. Prepare Variables
+          APP_NAME="${{ github.event.inputs.app_name }}"
+          APP_URL="${{ github.event.inputs.app_url }}"
+          SANITIZED_NAME=$(echo "$APP_NAME" | tr ' ' '' | tr -cd 'a-zA-Z0-9' | tr '[:upper:]' '[:lower:]')
+          if [ -z "$SANITIZED_NAME" ]; then SANITIZED_NAME="template"; fi
           
-          [profile.release]
-          codegen-units = 1
-          lto = true
-          strip = true
-          opt-level = "z"
-          panic = "abort"
+          # Unique Identifier to prevent update conflicts
+          TIMESTAMP=$(date +%s)
+          IDENTIFIER="com.app.$SANITIZED_NAME.v$TIMESTAMP"
+          
+          # Standard Chrome Mobile UA
+          USER_AGENT="Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+
+          echo "Configuring App: Name='$APP_NAME', ID='$IDENTIFIER', URL='$APP_URL'"
+
+          # 2. Modify tauri.conf.json
+          # We REMOVE the 'app.windows' array because we will create the window in Rust (lib.rs)
+          jq --arg name "$APP_NAME" --arg id "$IDENTIFIER" \
+             '.productName = $name | .identifier = $id | del(.app.windows)' \
+             src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp && mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
+
+          # 3. Overwrite src-tauri/src/lib.rs
+          # We use .on_navigation() to intercept requests BEFORE they hit the webview.
+          # This prevents ERR_UNKNOWN_URL_SCHEME for whatsapp:// etc.
+          
+          cat > src-tauri/src/lib.rs <<EOF
+          use tauri::{WebviewUrl, WebviewWindowBuilder};
+
+          #[cfg_attr(mobile, tauri::mobile_entry_point)]
+          pub fn run() {
+              tauri::Builder::default()
+                  .plugin(tauri_plugin_opener::init())
+                  .setup(|app| {
+                      let url_str = "$APP_URL";
+                      let ua = "$USER_AGENT";
+                      
+                      let url = url_str.parse().expect("Invalid App URL");
+                      
+                      let _window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
+                          .user_agent(ua)
+                          .on_navigation(|url| {
+                              let url_str = url.as_str();
+                              let scheme = url.scheme();
+                              
+                              // Check for specific schemes or domains to handle externally
+                              if scheme == "whatsapp" || 
+                                 scheme == "mailto" || 
+                                 scheme == "tel" || 
+                                 scheme == "sms" || 
+                                 scheme == "intent" ||
+                                 url_str.contains("api.whatsapp.com") || 
+                                 url_str.contains("wa.me") {
+                                  
+                                  println!("Intercepting external link: {}", url_str);
+                                  // Open with system default app
+                                  let _ = open::that(url_str);
+                                  // Block the webview navigation
+                                  return false;
+                              }
+                              // Allow all other navigations
+                              true
+                          })
+                          .build()?;
+                      Ok(())
+                  })
+                  .run(tauri::generate_context!())
+                  .expect("error while running tauri application");
+          }
           EOF
 
 
