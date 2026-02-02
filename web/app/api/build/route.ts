@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
     try {
-        const { url, name } = await req.json();
+        const { url, name, platforms } = await req.json();
 
         if (!url || !name) {
             return NextResponse.json({ error: 'URL and Name are required' }, { status: 400 });
@@ -15,10 +15,29 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Server configuration error: GITHUB_PAT or GITHUB_REPOSITORY missing' }, { status: 500 });
         }
 
-        const workflows = ['build-windows.yml', 'build-android.yml'];
+        const allWorkflows: Record<string, string> = {
+            'windows': 'build-windows.yml',
+            'android': 'build-android.yml'
+        };
+
+        // Default to both if not specified, otherwise filter
+        const selectedWorkflows = [];
+        if (!platforms || platforms.length === 0) {
+            selectedWorkflows.push(...Object.values(allWorkflows));
+        } else {
+            platforms.forEach((p: string) => {
+                if (allWorkflows[p]) selectedWorkflows.push(allWorkflows[p]);
+            });
+        }
+
+        // Validate we have at least one
+        if (selectedWorkflows.length === 0) {
+            return NextResponse.json({ error: 'No valid platforms selected' }, { status: 400 });
+        }
+
         const results = [];
 
-        for (const workflow of workflows) {
+        for (const workflow of selectedWorkflows) {
             const response = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${workflow}/dispatches`, {
                 method: 'POST',
                 headers: {

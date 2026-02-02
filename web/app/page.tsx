@@ -5,15 +5,23 @@ import { useState, useEffect } from 'react';
 export default function Home() {
     const [url, setUrl] = useState('');
     const [name, setName] = useState('');
+    const [buildWindows, setBuildWindows] = useState(true);
+    const [buildAndroid, setBuildAndroid] = useState(true);
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
     const [releases, setReleases] = useState<any[]>([]);
 
-    // Fetch builds on load
-    useEffect(() => {
+    // Fetch builds
+    const fetchReleases = () => {
         fetch('/api/releases').then(res => res.json()).then(data => {
             if (Array.isArray(data)) setReleases(data);
         }).catch(err => console.error(err));
+    };
+
+    useEffect(() => {
+        fetchReleases();
+        const interval = setInterval(fetchReleases, 15000); // Poll every 15 seconds
+        return () => clearInterval(interval);
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -22,10 +30,14 @@ export default function Home() {
         setStatus(null);
 
         try {
+            const platforms = [];
+            if (buildWindows) platforms.push('windows');
+            if (buildAndroid) platforms.push('android');
+
             const res = await fetch('/api/build', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url, name }),
+                body: JSON.stringify({ url, name, platforms }),
             });
 
             const data = await res.json();
@@ -40,6 +52,25 @@ export default function Home() {
             setStatus({ type: 'error', message: err.message });
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDelete = async (id: number) => {
+        if (!confirm('Are you sure you want to delete this release?')) return;
+
+        try {
+            const res = await fetch('/api/delete', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id }),
+            });
+            if (!res.ok) throw new Error('Failed to delete');
+
+            // Refresh list
+            fetchReleases();
+        } catch (err) {
+            alert('Error deleting release');
+            console.error(err);
         }
     };
 
@@ -76,6 +107,30 @@ export default function Home() {
                         />
                     </div>
 
+                    <div className="form-group">
+                        <label style={{ marginBottom: '0.5rem', display: 'block' }}>Platforms</label>
+                        <div style={{ display: 'flex', gap: '1rem' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: '#fff' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={buildWindows}
+                                    onChange={(e) => setBuildWindows(e.target.checked)}
+                                    style={{ width: '1.2rem', height: '1.2rem' }}
+                                />
+                                Windows
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: '#fff' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={buildAndroid}
+                                    onChange={(e) => setBuildAndroid(e.target.checked)}
+                                    style={{ width: '1.2rem', height: '1.2rem' }}
+                                />
+                                Android
+                            </label>
+                        </div>
+                    </div>
+
                     <button type="submit" className="glass-button" disabled={loading}>
                         {loading ? 'Starting Build...' : 'Generate App'}
                     </button>
@@ -90,13 +145,34 @@ export default function Home() {
                 {/* Downloads Section */}
                 {releases.length > 0 && (
                     <div style={{ marginTop: '3rem' }}>
-                        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', textAlign: 'center' }}>Recent Builds</h2>
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                            <h2 style={{ fontSize: '1.5rem', margin: 0 }}>Recent Builds</h2>
+                            <button
+                                onClick={fetchReleases}
+                                className="glass-button"
+                                style={{ width: 'auto', padding: '6px 12px', fontSize: '0.8rem' }}
+                            >
+                                ↻ Refresh
+                            </button>
+                        </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             {releases.slice(0, 5).map((release: any) => (
                                 <div key={release.id} className="glass-panel" style={{ padding: '1rem', background: 'rgba(255,255,255,0.03)' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                        <span style={{ fontWeight: 'bold', color: '#fff' }}>{release.name || release.tag_name}</span>
-                                        <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{new Date(release.created_at).toLocaleDateString()}</span>
+                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                            <span style={{ fontWeight: 'bold', color: '#fff' }}>{release.name || release.tag_name}</span>
+                                            <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{new Date(release.created_at).toLocaleString()}</span>
+                                        </div>
+                                        <button
+                                            onClick={() => handleDelete(release.id)}
+                                            style={{
+                                                background: 'transparent', border: '1px solid #ef4444',
+                                                color: '#ef4444', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer'
+                                            }}
+                                            title="Delete Release"
+                                        >
+                                            🗑 Delete
+                                        </button>
                                     </div>
                                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                                         {release.assets.map((asset: any) => (
